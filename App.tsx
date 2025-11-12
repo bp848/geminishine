@@ -49,6 +49,8 @@ import JournalQueuePage from './components/admin/JournalQueuePage.tsx';
 import MasterManagementPage from './components/admin/MasterManagementPage.tsx';
 import { ToastContainer } from './components/Toast.tsx';
 import ConfirmationDialog from './components/ConfirmationDialog.tsx';
+// FIX: Integrate BusinessPlanPage by importing it.
+import BusinessPlanPage from './components/BusinessPlanPage.tsx';
 
 
 import * as dataService from './services/dataService.ts';
@@ -224,36 +226,46 @@ const App: React.FC = () => {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (!isMounted) return;
 
-            // This event is crucial for password reset. It fires when the user lands on the page from the reset link.
             if (event === 'PASSWORD_RECOVERY') {
                 setIsPasswordRecovery(true);
-            } else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-                setIsPasswordRecovery(false);
+                setAuthLoading(false);
+                return;
             }
-            
-            setSession(session);
 
-            if (session) {
-                try {
-                    const resolvedUser = await dataService.resolveUserSession(session.user);
-                    if (isMounted) {
-                        setCurrentUser(resolvedUser);
-                        setError(null);
-                    }
-                } catch (err: any) {
-                    if (isMounted) {
-                        console.error('Failed to resolve user session:', err);
-                        setError(`ユーザープロファイルの読み込みエラー: ${err.message || '不明なエラー'}`);
-                        setCurrentUser(null);
-                        await supabase.auth.signOut(); // Sign out to prevent broken state
+            if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+                setSession(session);
+                setIsPasswordRecovery(false);
+
+                if (session) {
+                    try {
+                        const resolvedUser = await dataService.resolveUserSession(session.user);
+                        if (isMounted) {
+                            setCurrentUser(resolvedUser);
+                            setError(null);
+                        }
+                    } catch (err: any) {
+                        if (isMounted) {
+                            console.error('Failed to resolve user session:', err);
+                            setError(`ユーザープロファイルの読み込みエラー: ${err.message || '不明なエラー'}`);
+                            setCurrentUser(null);
+                            await supabase.auth.signOut();
+                        }
                     }
                 }
-            } else {
-                if (isMounted) setCurrentUser(null);
+            } else if (event === 'SIGNED_OUT') {
+                if (isMounted) {
+                    setSession(null);
+                    setCurrentUser(null);
+                    setIsPasswordRecovery(false);
+                }
             }
 
-            // Authentication check is complete, we can stop the initial loading.
-            if (isMounted) setAuthLoading(false);
+            // Only stop auth loading after the initial session has been processed
+            if (event === 'INITIAL_SESSION') {
+                if (isMounted) {
+                    setAuthLoading(false);
+                }
+            }
         });
 
         return () => {
@@ -488,7 +500,8 @@ const App: React.FC = () => {
             case 'analysis_ranking':
                 return <SalesRanking jobs={jobs} />;
             case 'accounting_business_plan':
-                return <PlaceholderPage title="経営計画" />;
+                // FIX: Replace PlaceholderPage with BusinessPlanPage to enable the feature.
+                return <BusinessPlanPage allUsers={allUsers} />;
             case 'manufacturing_cost':
                 return <ManufacturingCostManagement jobs={jobs} />;
             case 'business_support_proposal':
